@@ -34,7 +34,6 @@ class Chunk {
     }
 
     const geoms = [];
-    const materials = [];
 
     for(let x=0;x<CHUNK_SIZE;x++){
       for(let y=0;y<CHUNK_SIZE;y++){
@@ -74,23 +73,38 @@ class World {
 
   key(cx,cy,cz){ return `${cx},${cy},${cz}`; }
 
-  createChunk(cx,cy,cz){
+  // createChunk: if `blocks` (Uint8Array or array) is provided, use it as chunk data instead of procedural generation.
+  createChunk(cx,cy,cz, blocks=null){
     const key = this.key(cx,cy,cz);
     if(this.chunks.has(key)) return this.chunks.get(key);
     const c = new Chunk(cx,cy,cz);
-    // Fill blocks with a simple heightmap
-    for(let x=0;x<CHUNK_SIZE;x++){
-      for(let z=0;z<CHUNK_SIZE;z++){
-        // world coords
-        const wx = cx*CHUNK_SIZE + x;
-        const wz = cz*CHUNK_SIZE + z;
-        const height = Math.floor(6 + 4*Math.sin((wx+wz)/8));
-        for(let y=0;y<CHUNK_SIZE;y++){
-          const wy = cy*CHUNK_SIZE + y;
-          if(wy<=height) c.setBlock(x,y,z, wy===height?1:2);
+
+    if(blocks){
+      // support either Uint8Array or regular array
+      if(blocks instanceof Uint8Array){
+        c.blocks.set(blocks);
+      } else if(Array.isArray(blocks)){
+        c.blocks.set(Uint8Array.from(blocks));
+      } else if(blocks.buffer instanceof ArrayBuffer){
+        // ArrayBuffer or TypedArray-like
+        c.blocks.set(new Uint8Array(blocks));
+      }
+    } else {
+      // Fill blocks with a simple heightmap
+      for(let x=0;x<CHUNK_SIZE;x++){
+        for(let z=0;z<CHUNK_SIZE;z++){
+          // world coords
+          const wx = cx*CHUNK_SIZE + x;
+          const wz = cz*CHUNK_SIZE + z;
+          const height = Math.floor(6 + 4*Math.sin((wx+wz)/8));
+          for(let y=0;y<CHUNK_SIZE;y++){
+            const wy = cy*CHUNK_SIZE + y;
+            if(wy<=height) c.setBlock(x,y,z, wy===height?1:2);
+          }
         }
       }
     }
+
     c.rebuildMesh();
     this.chunks.set(key,c);
     return c;

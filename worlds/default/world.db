@@ -1,0 +1,10 @@
+{
+  "name": "default",
+  "seed": 12345,
+  "chunkSize": 16,
+  "chunks": [
+    [0,0,0],[1,0,0],[0,1,0],[1,1,0],[0,0,1],[1,0,1],[0,1,1],[1,1,1]
+  ],
+  "createdAt": "2026-08-08T00:00:00Z",
+  "description": "Default example world used by the JS starter prototype (2x2x2 chunks)."
+}
