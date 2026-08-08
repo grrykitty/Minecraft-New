@@ -3,6 +3,7 @@ import { init as initRenderer, startRenderLoop, getScene, getCamera, getRenderer
 import World from './world.js';
 import Player from './player.js';
 import { loadWorld } from './worldLoader.js';
+import { importArchive } from './importer.js';
 
 async function main(){
   initRenderer(document.getElementById('app'));
@@ -25,6 +26,30 @@ async function main(){
   }
 
   const player = new Player(getCamera(), getRenderer().domElement, world);
+
+  // Wire import button
+  const importBtn = document.getElementById('import-world-btn');
+  importBtn.addEventListener('click', ()=>{
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.zip,.epk';
+    input.onchange = async ()=>{
+      const f = input.files[0];
+      if(!f) return;
+      // clear existing chunks before importing
+      for(const key of [...world.chunks.keys()]){
+        const c = world.chunks.get(key);
+        if(c){
+          // remove from scene
+          const scene = getScene();
+          scene.remove(c.group);
+        }
+        world.chunks.delete(key);
+      }
+      await importArchive(f, world, getScene());
+    };
+    input.click();
+  });
 
   startRenderLoop((dt)=>{
     player.update(dt);

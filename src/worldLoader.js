@@ -5,6 +5,8 @@
 // - upload a replacement world.db
 // - attempt a best-effort automatic recovery
 // - regenerate procedurally (fallback)
+// Additionally, if the world metadata indicates a Creative gamemode, the loader will show an explicit
+// unsupported-gamemode overlay and prevent loading the world.
 
 async function fetchText(url){
   const res = await fetch(url);
@@ -110,6 +112,28 @@ function showRecoveryUI(worldName, rawText, onUploadCallback, onRecoverCallback,
   document.body.appendChild(overlay);
 }
 
+function showUnsupportedGamemode(worldName){
+  if(document.getElementById('unsupported-gamemode-overlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'unsupported-gamemode-overlay';
+  Object.assign(overlay.style, { position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:10000 });
+  const box = document.createElement('div');
+  Object.assign(box.style, { background:'#400', color:'#fff', padding:'20px', borderRadius:'8px', width:'480px', fontFamily:'sans-serif' });
+  const h = document.createElement('h2'); h.textContent = 'Unsupported gamemode'; h.style.margin='0 0 8px 0';
+  const p = document.createElement('p'); p.innerHTML = `<strong style="color:#ff8080">The world has been loaded in a unsupported gamemode.</strong><br/>This game only supports Survival mode.`;
+  const btn = document.createElement('button'); btn.textContent = 'Regenerate procedurally instead';
+  Object.assign(btn.style, { marginTop:'12px', padding:'8px 12px', background:'#600', color:'#fff', border:'none', borderRadius:'6px', cursor:'pointer' });
+  btn.onclick = ()=>{
+    const overlayEl = document.getElementById('unsupported-gamemode-overlay');
+    if(overlayEl) document.body.removeChild(overlayEl);
+    const ev = new CustomEvent('regenerateProcedural', {});
+    window.dispatchEvent(ev);
+  };
+  box.appendChild(h); box.appendChild(p); box.appendChild(btn);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
 async function tryAutoRecover(rawText){
   // Best-effort: find a JSON object in the text by searching for first '{' and last '}' and try to parse substring.
   // Also try to find a "chunks": [...] array using regex and wrap into a minimal JSON if needed.
@@ -167,6 +191,19 @@ async function loadChunksForMeta(base, meta, world, scene){
   return true;
 }
 
+function isCreativeMeta(meta){
+  if(!meta) return false;
+  const gm = meta.gamemode ?? meta.gameMode ?? meta.mode ?? meta.type ?? meta.GameMode ?? meta.game_mode;
+  if(typeof gm === 'string'){
+    if(gm.toLowerCase().includes('creative')) return true;
+  }
+  if(typeof gm === 'number'){
+    if(gm === 1) return true;
+  }
+  if(meta.Player && meta.Player.gamemode) return String(meta.Player.gamemode).toLowerCase().includes('creative');
+  return false;
+}
+
 export async function loadWorld(worldName, world, scene){
   const base = `/worlds/${worldName}`;
   const dbUrl = `${base}/world.db`;
@@ -182,12 +219,16 @@ export async function loadWorld(worldName, world, scene){
   try{
     meta = JSON.parse(raw);
   }catch(parseErr){
-    console.warn('Failed to parse world.db — launching World Data Recovery Assistant', parseErr);
+    console.warn('Failed to parse world.db — launching recovery UI', parseErr);
 
     // Handlers for recovery UI
     const onUpload = async (uploadedText)=>{
       try{
         const parsed = JSON.parse(uploadedText);
+        if(isCreativeMeta(parsed)){
+          showUnsupportedGamemode(worldName);
+          return false;
+        }
         const ok = await loadChunksForMeta(base, parsed, world, scene);
         return ok;
       }catch(e){
@@ -197,6 +238,10 @@ export async function loadWorld(worldName, world, scene){
     const onRecover = async (rawText)=>{
       const candidate = await tryAutoRecover(rawText);
       if(candidate){
+        if(isCreativeMeta(candidate)){
+          showUnsupportedGamemode(worldName);
+          return false;
+        }
         const ok = await loadChunksForMeta(base, candidate, world, scene);
         return ok;
       }
@@ -219,7 +264,12 @@ export async function loadWorld(worldName, world, scene){
     return false;
   }
 
-  // meta parsed successfully. Validate minimal fields.
+  // meta parsed successfully. Check gamemode
+  if(isCreativeMeta(meta)){
+    showUnsupportedGamemode(worldName);
+    return false;
+  }
+
   if(!meta.chunks || !Array.isArray(meta.chunks) || meta.chunks.length===0){
     console.warn('world.db missing chunk list or chunks is empty — falling back to procedural generation');
     return false;
