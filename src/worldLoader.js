@@ -182,7 +182,7 @@ export async function loadWorld(worldName, world, scene){
   try{
     meta = JSON.parse(raw);
   }catch(parseErr){
-    console.warn('Failed to parse world.db — launching recovery UI', parseErr);
+    console.warn('Failed to parse world.db — launching World Data Recovery Assistant', parseErr);
 
     // Handlers for recovery UI
     const onUpload = async (uploadedText)=>{
